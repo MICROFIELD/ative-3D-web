@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Agent - Final Version</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #4e54c8; --success: #1dd1a1; --bg: #f5f6fa; --warning: #fbc531; --danger: #ff4757; }
+        body { font-family: 'Poppins', 'Padauk', sans-serif; background: var(--bg); margin: 0; padding: 15px; }
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .ag-name { font-size: 24px; font-weight: 700; color: #2d3436; display: flex; align-items: center; gap: 10px; }
+        .all-total { font-size: 18px; font-weight: 700; color: var(--success); }
+        textarea { width: 100%; height: 160px; padding: 15px; border-radius: 12px; border: 2px solid #eee; box-sizing: border-box; font-size: 16px; margin: 10px 0; font-family: inherit; }
+        button { width: 100%; padding: 14px; border: none; border-radius: 12px; color: white; font-weight: 600; cursor: pointer; }
+        .btn-green { background: linear-gradient(45deg, #11998e, #38ef7d); }
+        .nav-bar { display: flex; gap: 10px; margin: 20px 0; background: #f1f2f6; padding: 5px; border-radius: 15px; }
+        .nav-item { flex: 1; text-align: center; padding: 10px; cursor: pointer; border-radius: 10px; font-weight: 600; font-size: 13px; color: #747d8c; }
+        .nav-item.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .v-group { background: #fff; border: 2px solid var(--warning); border-radius: 15px; padding: 15px; margin-bottom: 15px; }
+        .v-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .btn-more { color: var(--primary); font-size: 13px; cursor: pointer; text-decoration: underline; font-weight: 600; }
+        .v-details { background: #f9f9f9; padding: 12px; border-radius: 10px; margin-top: 10px; font-size: 13px; display: none; border-left: 4px solid var(--primary); }
+        .v-total { border-top: 1px solid #eee; margin-top: 10px; padding-top: 8px; font-weight: bold; font-size: 18px; }
+        .example-box { background: #fff9e6; padding: 10px; border-radius: 10px; font-size: 11px; color: #666; border: 1px dashed var(--warning); margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen" class="card">
+        <h2 style="text-align:center; color:var(--primary);">Agent Login</h2>
+        <input type="number" id="agent-key-in" placeholder="6-Digit Key" style="width:100%; padding:12px; margin-bottom:15px; border-radius:10px; border:1px solid #ddd;">
+        <button class="btn-green" onclick="agentAuth()">ဝင်မည်</button>
+    </div>
+
+    <div id="agent-panel" class="card" style="display:none;">
+        <div class="header-box">
+            <div class="ag-name" id="ag-display-name">👤 Loading...</div>
+            <div class="all-total" id="grand-total">Total = 0 Ks</div>
+        </div>
+
+        <div class="nav-bar">
+            <div class="nav-item active" onclick="switchTab('input', this)">➕ ဂဏန်းတင်မည်</div>
+            <div class="nav-item" onclick="switchTab('history', this)">📜 တင်ထားသောဂဏန်းများ</div>
+        </div>
+
+        <div id="ag-input">
+            <div class="example-box">
+                <b>နမူနာတင်ရန်ပုံစံများ:</b><br>
+                123.456=1000@200 | 123=@500 | 123=r500
+            </div>
+            <textarea id="bulk-input" placeholder="ဂဏန်းများကို နမူနာအတိုင်း ရိုက်ထည့်ပါ..."></textarea>
+            <button class="btn-green" onclick="processBets()">စာရင်းတင်မည် 🚀</button>
+        </div>
+
+        <div id="ag-history" style="display:none; max-height: 550px; overflow-y: auto;"></div>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD3KDPJgbqrAnr8oHlG7jqUBaSB0L5E9zQ",
+        authDomain: "my-3d-app-1b979.firebaseapp.com",
+        projectId: "my-3d-app-1b979",
+        storageBucket: "my-3d-app-1b979.firebasestorage.app",
+        messagingSenderId: "609321738825",
+        appId: "1:609321738825:web:2df9dfae0110da0571d598"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    let currentAgent = null;
+
+    async function agentAuth() {
+        const key = document.getElementById('agent-key-in').value;
+        const doc = await db.collection("agents").doc(key).get();
+        if(doc.exists) {
+            currentAgent = doc.data();
+            document.getElementById('login-screen').style.display = "none";
+            document.getElementById('agent-panel').style.display = "block";
+            document.getElementById('ag-display-name').innerText = "👤 " + currentAgent.name;
+            // Login ဝင်ဝင်ချင်း စုစုပေါင်းငွေကို တွက်ခိုင်းထားသည်
+            updateGrandTotal();
+        } else { alert("Key မှားနေသည်"); }
+    }
+
+    function switchTab(id, el) {
+        document.getElementById('ag-input').style.display = id === 'input' ? 'block' : 'none';
+        document.getElementById('ag-history').style.display = id === 'history' ? 'block' : 'none';
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+        if(id === 'history') loadHistory();
+    }
+
+    // Agent တင်ထားသမျှ အားလုံးကိုပေါင်းပြီး အပေါ်မှာပြရန်
+    async function updateGrandTotal() {
+        const snap = await db.collection("bets").where("agentKey", "==", currentAgent.key).get();
+        let sum = 0;
+        snap.forEach(doc => { sum += doc.data().amount; });
+        document.getElementById('grand-total').innerText = "Total = " + sum.toLocaleString() + " Ks";
+    }
+
+    function getR(s) {
+        let res = new Set();
+        let a = s.split('');
+        const p = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+        p.forEach(i => res.add(a[i[0]]+a[i[1]]+a[i[2]]));
+        return Array.from(res);
+    }
+
+    async function processBets() {
+        const text = document.getElementById('bulk-input').value.trim();
+        if(!text) return;
+        const lines = text.split('\n');
+        const batch = db.batch();
+        
+        let hasError = false;
+        let total = 0;
+        let finalEntries = [];
+
+        for (let line of lines) {
+            const l = line.trim();
+            if(!l) continue;
+            if(!l.includes('=')) { hasError = true; break; }
+
+            let numsPart = "", amtPart = "", isSpecialR = false;
+            if(l.includes('=@')) { [numsPart, amtPart] = l.split('=@'); isSpecialR = true; }
+            else { [numsPart, amtPart] = l.split('='); }
+
+            const nums = numsPart.trim().split(/[./*\s]+/).filter(n => n.length === 3);
+            if(nums.length === 0) { hasError = true; break; }
+
+            const a = amtPart.trim().toLowerCase();
+            if(!a) { hasError = true; break; }
+
+            let dAmt = 0, rAmt = 0;
+            if(isSpecialR) { dAmt = parseInt(a); rAmt = dAmt; }
+            else if (a.startsWith('r')) { dAmt = parseInt(a.substring(1)); rAmt = dAmt; }
+            else if (a.includes('@') || a.includes('r')) {
+                const p = a.split(/[@r]/);
+                dAmt = parseInt(p[0]) || 0; rAmt = parseInt(p[1]) || 0;
+            } else { dAmt = parseInt(a) || 0; }
+
+            if(isNaN(dAmt)) { hasError = true; break; }
+
+            nums.forEach(n => {
+                const perms = getR(n);
+                if(isSpecialR || a.startsWith('r')) {
+                    perms.forEach(rn => { finalEntries.push({num: rn, amt: dAmt}); total += dAmt; });
+                } else {
+                    if(dAmt > 0) { finalEntries.push({num: n, amt: dAmt}); total += dAmt; }
+                    if(rAmt > 0) { perms.forEach(rn => { if(rn !== n) { finalEntries.push({num: rn, amt: rAmt}); total += rAmt; } }); }
+                }
+            });
+        }
+
+        if(hasError) {
+            alert("⚠️ ဂဏန်းတင်တာ မအောင်မြင်ပါ!\n\nနမူနာအတိုင်း မှန်ကန်စွာ တင်ပေးပါ။\n\n123.456=1000@200\n\n123=@500\n\n123=r500");
+            return;
+        }
+
+        const lastSnap = await db.collection("bets").orderBy("vIndex", "desc").limit(1).get();
+        let nextVIndex = 1;
+        if(!lastSnap.empty) nextVIndex = (lastSnap.docs[0].data().vIndex || 0) + 1;
+        const vNo = "voucher " + nextVIndex;
+
+        finalEntries.forEach(ent => {
+            const ref = db.collection("bets").doc();
+            batch.set(ref, {
+                vNo, vIndex: nextVIndex, number: ent.num, amount: ent.amt,
+                origText: text, agentKey: currentAgent.key, agentName: currentAgent.name,
+                time: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        await batch.commit();
+        alert(`အောင်မြင်သည် ✅`);
+        document.getElementById('bulk-input').value = "";
+        updateGrandTotal(); // စာရင်းတင်ပြီးတိုင်း အပေါ်က Total ကို Update လုပ်သည်
+    }
+
+    async function loadHistory() {
+        const snap = await db.collection("bets").where("agentKey", "==", currentAgent.key).orderBy("time", "desc").limit(100).get();
+        const container = document.getElementById("ag-history");
+        container.innerHTML = "";
+        
+        let groups = {};
+        snap.forEach(doc => {
+            const b = doc.data();
+            if(!groups[b.vNo]) groups[b.vNo] = { items: [], total: 0, origLines: new Set() };
+            groups[b.vNo].items.push(b);
+            groups[b.vNo].total += b.amount;
+            b.origText.split('\n').forEach(l => { if(l.includes('=')) groups[b.vNo].origLines.add(l); });
+        });
+
+        for (let vNo in groups) {
+            let origHtml = Array.from(groups[vNo].origLines).join('<br>');
+            let detailsHtml = groups[vNo].items.map(i => `<b>${i.number}</b>=${i.amount}`).join(', ');
+            
+            container.innerHTML += `
+                <div class="v-group">
+                    <div style="font-weight:bold; color:var(--primary); font-size:12px;">${vNo.toUpperCase()}</div>
+                    <div class="v-row">
+                        <div style="font-size:15px;">${origHtml}</div>
+                        <div class="btn-more" onclick="toggleDetails(this)">more</div>
+                    </div>
+                    <div class="v-details">${detailsHtml}</div>
+                    <div class="v-total">Total = ${groups[vNo].total.toLocaleString()} Ks</div>
+                </div>`;
+        }
+        updateGrandTotal(); // History ကြည့်တိုင်း အပေါ်က Total ကို တစ်ခါပြန်စစ်သည်
+    }
+
+    function toggleDetails(btn) {
+        const details = btn.parentElement.nextElementSibling;
+        details.style.display = details.style.display === "block" ? "none" : "block";
+        btn.innerText = details.style.display === "block" ? "hide" : "more";
+    }
+</script>
+</body>
+</html>
