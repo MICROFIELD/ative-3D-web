@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Admin - Ultimate Dashboard</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #4e54c8; --success: #1dd1a1; --danger: #ff4757; --warning: #fbc531; --bg: #f5f6fa; }
+        body { font-family: 'Poppins', 'Padauk', sans-serif; background: var(--bg); margin: 0; padding: 10px; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); max-width: 900px; margin: auto; }
+        
+        #admin-login-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:var(--primary); z-index:9999; display:flex; align-items:center; justify-content:center; }
+        
+        .nav-bar { display: flex; gap: 5px; margin-bottom: 20px; background: #eee; padding: 5px; border-radius: 12px; overflow-x: auto; }
+        .nav-item { flex: 1; text-align: center; padding: 12px; cursor: pointer; border-radius: 8px; font-size: 11px; font-weight: 600; color: #666; min-width: 85px; white-space: nowrap; }
+        .nav-item.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .v-group { background: #fff; border: 2px solid var(--warning); border-radius: 15px; padding: 15px; margin-bottom: 15px; }
+        .v-header { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; font-weight: bold; }
+        
+        .compare-box { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .box-view { background: #f8f9fa; padding: 8px; border-radius: 8px; font-size: 13px; border-left: 3px solid #6c757d; }
+        .box-edit { background: #fff9db; border-left: 3px solid var(--warning); }
+
+        .result-card { background: #fff; padding: 15px; border-radius: 15px; margin-bottom: 10px; border: 1px solid #ddd; }
+        .summary-badge { padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-right: 5px; }
+        .bg-win { background: var(--success); color: white; }
+        .bg-tup { background: var(--warning); color: black; }
+
+        input, select { padding: 12px; border-radius: 10px; border: 1px solid #ddd; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        button { padding: 10px; border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer; }
+        .btn-blue { background: var(--primary); width: 100%; }
+        .btn-edit { background: #6c5ce7; font-size: 11px; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="admin-login-overlay">
+        <div class="card" style="width:300px; text-align:center;">
+            <h3>Admin Login</h3>
+            <input type="password" id="admin-pass-input" placeholder="****" style="text-align:center; letter-spacing:8px;">
+            <button class="btn-blue" onclick="checkAdminLogin()">ဝင်မည်</button>
+        </div>
+    </div>
+
+    <div id="admin-main-content" style="display:none;">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="color: var(--primary); margin:0;">3D Dashboard</h3>
+                <button onclick="changeAdminPass()" style="background:#6c757d; font-size:10px;">Pass ပြောင်းရန်</button>
+            </div>
+            
+            <div class="nav-bar">
+                <div class="nav-item active" onclick="showTab('tab-history', this)">📜 စာရင်း</div>
+                <div class="nav-item" onclick="showTab('tab-sales', this)">📈 ရောင်းကြေး</div>
+                <div class="nav-item" onclick="showTab('tab-checker', this)">💰 ပေါက်စစ်</div>
+                <div class="nav-item" onclick="showTab('tab-limit', this)">📊 Limit</div>
+                <div class="nav-item" onclick="showTab('tab-agents', this)">👥 Agents</div>
+            </div>
+
+            <div id="tab-history" class="tab-content active">
+                <select id="agent-filter" onchange="loadAgentVouchers()"></select>
+                <div id="voucher-display-admin"></div>
+            </div>
+
+            <div id="tab-sales" class="tab-content">
+                <div id="sales-summary-list"></div>
+            </div>
+
+            <div id="tab-checker" class="tab-content">
+                <input type="number" id="win-num" placeholder="ထွက်ဂဏန်း (၃) လုံး">
+                <button class="btn-blue" onclick="checkWinners()">အနိုင်ရသူများ စစ်မည် 🔍</button>
+                <div id="win-results" style="margin-top: 20px;"></div>
+            </div>
+
+            <div id="tab-limit" class="tab-content">
+                <input type="number" id="set-limit-input">
+                <button class="btn-blue" onclick="saveGlobalLimit()">Limit သိမ်းမည်</button>
+                <div id="limit-status-list" style="margin-top:20px;"></div>
+            </div>
+
+            <div id="tab-agents" class="tab-content">
+                <input type="text" id="new-agent-name" placeholder="အေးဂျင့်အမည်">
+                <button class="btn-blue" onclick="addNewAgent()">Agent အသစ်ထုတ်မည် +</button>
+                <div id="agent-manage-list" style="margin-top:20px;"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD3KDPJgbqrAnr8oHlG7jqUBaSB0L5E9zQ",
+        authDomain: "my-3d-app-1b979.firebaseapp.com",
+        projectId: "my-3d-app-1b979",
+        storageBucket: "my-3d-app-1b979.firebasestorage.app",
+        messagingSenderId: "609321738825",
+        appId: "1:609321738825:web:2df9dfae0110da0571d598"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    async function checkAdminLogin() {
+        const input = document.getElementById('admin-pass-input').value;
+        const setDoc = await db.collection("settings").doc("admin_config").get();
+        const correctPass = setDoc.data()?.password || "1234";
+        if(input === correctPass) {
+            document.getElementById('admin-login-overlay').style.display = 'none';
+            document.getElementById('admin-main-content').style.display = 'block';
+            loadAgentList();
+        } else alert("မှားနေသည်");
+    }
+
+    function showTab(id, el) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        el.classList.add('active');
+        if(id === 'tab-history') loadAgentList();
+        if(id === 'tab-sales') loadSalesSummary();
+        if(id === 'tab-limit') loadLimitStatus();
+        if(id === 'tab-agents') loadAgentsAdmin();
+    }
+
+    // --- စာရင်း Tab logic ---
+    async function loadAgentList() {
+        const snap = await db.collection("agents").get();
+        const select = document.getElementById('agent-filter');
+        const curr = select.value || "all";
+        select.innerHTML = '<option value="all">အေးဂျင့်အားလုံးကြည့်မည်</option>';
+        snap.forEach(doc => select.innerHTML += `<option value="${doc.id}">${doc.data().name}</option>`);
+        select.value = curr; loadAgentVouchers();
+    }
+
+    async function loadAgentVouchers() {
+        const filter = document.getElementById('agent-filter').value;
+        const display = document.getElementById('voucher-display-admin');
+        display.innerHTML = "Loading...";
+        let query = db.collection("bets").orderBy("time", "desc");
+        if(filter !== "all") query = query.where("agentKey", "==", filter);
+        const snap = await query.get();
+        display.innerHTML = "";
+        let groups = {};
+        snap.forEach(doc => {
+            const b = doc.data();
+            const vID = b.vNo + "_" + b.agentKey;
+            if(!groups[vID]) groups[vID] = { name: b.agentName, vNo: b.vNo, total: 0, items: [], origText: b.origText||"", editedText: b.editedText||"", agentKey: b.agentKey, time: b.time };
+            groups[vID].items.push({ id: doc.id, ...b });
+            groups[vID].total += b.amount;
+        });
+        for(let id in groups) {
+            let hasEdit = groups[id].editedText && groups[id].editedText !== groups[id].origText;
+            display.innerHTML += `
+                <div class="v-group">
+                    <div class="v-header"><span>${groups[id].name} [${groups[id].vNo}]</span> <b>${groups[id].total.toLocaleString()} Ks</b></div>
+                    <div class="compare-box">
+                        <div class="box-view"><small>ORIGINAL</small><br>${groups[id].origText.replace(/\n/g, '<br>')}</div>
+                        <div class="box-view box-edit" style="${hasEdit?'':'display:none;'}"><small>EDITED</small><br>${groups[id].editedText.replace(/\n/g, '<br>')}</div>
+                    </div>
+                    <button class="btn-edit" style="background:var(--warning); color:black; width:100%;" 
+                        onclick="editWholeVoucher('${groups[id].vNo}', '${groups[id].agentKey}', \`${hasEdit?groups[id].editedText:groups[id].origText}\`, '${groups[id].name}', '${groups[id].time}', \`${groups[id].origText}\`)">
+                        Voucher စာရင်းပြင်မည် ✍️
+                    </button>
+                </div>`;
+        }
+    }
+
+    // --- ပေါက်စစ် Tab logic (ဒဲ့/တွပ် ခွဲပြခြင်း) ---
+    async function checkWinners() {
+        const winStr = document.getElementById('win-num').value;
+        if(winStr.length !== 3) return alert("၃ လုံးရိုက်ပါ");
+        const resDiv = document.getElementById('win-results');
+        resDiv.innerHTML = "တွက်ချက်နေသည်...";
+
+        const winNum = parseInt(winStr);
+        const winR = getPermutations(winStr);
+        const tupNums = [(winNum-1).toString().padStart(3,'0'), (winNum+1).toString().padStart(3,'0')];
+        const tupR = [...getPermutations(tupNums[0]), ...getPermutations(tupNums[1])];
+
+        const snap = await db.collection("bets").get();
+        let agentSummary = {};
+
+        snap.forEach(doc => {
+            const b = doc.data();
+            let isWin = (b.number === winStr || winR.includes(b.number));
+            let isTup = (tupNums.includes(b.number) || tupR.includes(b.number));
+
+            if(isWin || isTup) {
+                if(!agentSummary[b.agentName]) agentSummary[b.agentName] = { winTotal: 0, tupTotal: 0, details: [] };
+                if(isWin) agentSummary[b.agentName].winTotal += b.amount;
+                if(isTup) agentSummary[b.agentName].tupTotal += b.amount;
+                agentSummary[b.agentName].details.push({ num: b.number, amt: b.amount, type: isWin ? 'ဒဲ့/R' : 'တွပ်' });
+            }
+        });
+
+        resDiv.innerHTML = "";
+        for(let name in agentSummary) {
+            const s = agentSummary[name];
+            resDiv.innerHTML += `
+                <div class="result-card">
+                    <div style="border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px;"><b>${name}</b></div>
+                    <div style="margin-bottom:8px;">
+                        <span class="summary-badge bg-win">ဒဲ့/R စုစုပေါင်း: ${s.winTotal.toLocaleString()} Ks</span>
+                        <span class="summary-badge bg-tup">တွပ် စုစုပေါင်း: ${s.tupTotal.toLocaleString()} Ks</span>
+                    </div>
+                    <div style="font-size:12px; color:#666;">
+                        ${s.details.map(d => `${d.num} (${d.type}) = ${d.amt}`).join(', ')}
+                    </div>
+                </div>`;
+        }
+        if(Object.keys(agentSummary).length === 0) resDiv.innerHTML = "ပေါက်သူမရှိပါ";
+    }
+
+    // --- Utils ---
+    function getPermutations(s) {
+        if(s.length!==3) return [];
+        let r = new Set(), a = s.split('');
+        for(let i=0;i<3;i++) for(let j=0;j<3;j++) for(let k=0;k<3;k++) if(i!==j && j!==k && i!==k) r.add(a[i]+a[j]+a[k]);
+        return Array.from(r);
+    }
+
+    async function editWholeVoucher(vNo, aKey, currText, aName, time, oText) {
+        let nText = prompt("Voucher စာရင်းပြင်ရန်:", currText);
+        if(!nText || nText === currText) return;
+        if(confirm("အသစ်ပြန်တွက်မှာ သေချာပါသလား?")) {
+            const snap = await db.collection("bets").where("vNo","==",vNo).where("agentKey","==",aKey).get();
+            const batch = db.batch();
+            snap.forEach(doc => batch.delete(doc.ref));
+            nText.split('\n').forEach(line => {
+                if(!line.includes('=')) return;
+                let [ns, as] = line.split('=');
+                let [m, r] = as.split('@');
+                let mA = parseInt(m)||0, rA = parseInt(r)||0;
+                ns.split('.').forEach(n => {
+                    n = n.trim(); if(!n) return;
+                    if(mA>0) batch.set(db.collection("bets").doc(), { number:n, amount:mA, vNo:vNo, agentKey:aKey, agentName:aName, time:time, origText:oText, editedText:nText });
+                    if(rA>0) getPermutations(n).forEach(p => batch.set(db.collection("bets").doc(), { number:p, amount:rA, vNo:vNo, agentKey:aKey, agentName:aName, time:time, origText:oText, editedText:nText }));
+                });
+            });
+            await batch.commit(); alert("ပြင်ဆင်ပြီးပါပြီ"); loadAgentVouchers();
+        }
+    }
+
+    async function loadSalesSummary() {
+        const snap = await db.collection("bets").get();
+        let sales = {}; let grand = 0;
+        snap.forEach(doc => { const b = doc.data(); sales[b.agentName] = (sales[b.agentName]||0)+b.amount; grand+=b.amount; });
+        const div = document.getElementById('sales-summary-list'); div.innerHTML = "<h4>စုစုပေါင်းရောင်းကြေး</h4>";
+        for(let n in sales) div.innerHTML += `<div class="result-card" style="display:flex; justify-content:space-between"><b>${n}</b> <span>${sales[n].toLocaleString()} Ks</span></div>`;
+        div.innerHTML += `<div class="result-card" style="background:var(--primary); color:white; display:flex; justify-content:space-between"><b>Grand Total</b> <b>${grand.toLocaleString()} Ks</b></div>`;
+    }
+
+    async function loadLimitStatus() {
+        const set = await db.collection("settings").doc("config").get();
+        const lim = set.data()?.limit || 50000;
+        document.getElementById('set-limit-input').value = lim;
+        const snap = await db.collection("bets").get();
+        let use = {}; snap.forEach(doc => { const b = doc.data(); use[b.number] = (use[b.number]||0)+b.amount; });
+        const div = document.getElementById('limit-status-list'); div.innerHTML = "";
+        Object.entries(use).sort((a,b)=>b[1]-a[1]).forEach(([n, a]) => {
+            let p = Math.min((a/lim)*100, 100);
+            div.innerHTML += `<div style="margin-bottom:10px;"><b>${n}</b> (${a}/${lim})<div style="background:#ddd; height:8px; border-radius:4px;"><div style="width:${p}%; background:${p>80?'red':'green'}; height:100%; border-radius:4px;"></div></div></div>`;
+        });
+    }
+
+    async function loadAgentsAdmin() {
+        const snap = await db.collection("agents").get();
+        const div = document.getElementById('agent-manage-list'); div.innerHTML = "";
+        snap.forEach(doc => { const a = doc.data(); div.innerHTML += `<div class="result-card" style="display:flex; justify-content:space-between"><div><b>${a.name}</b><br><small>Key: ${a.key}</small></div><button class="btn-edit" onclick="editAgent('${doc.id}','${a.name}','${a.key}')">Edit</button></div>`; });
+    }
+
+    async function editAgent(id,n,k) {
+        let nN = prompt("နာမည်:", n); let nK = prompt("Key:", k);
+        if(nN && nK) { await db.collection("agents").doc(id).delete(); await db.collection("agents").doc(nK).set({name:nN, key:nK}); loadAgentsAdmin(); }
+    }
+
+    async function addNewAgent() {
+        const n = document.getElementById('new-agent-name').value; if(!n) return;
+        const k = Math.floor(100000 + Math.random()*900000).toString();
+        await db.collection("agents").doc(k).set({ name: n, key: k }); loadAgentsAdmin();
+    }
+
+    async function saveGlobalLimit() {
+        const v = document.getElementById('set-limit-input').value;
+        await db.collection("settings").doc("config").set({ limit: parseInt(v) }); alert("Saved");
+    }
+
+    async function changeAdminPass() {
+        let p = prompt("Password အသစ်:");
+        if(p) await db.collection("settings").doc("admin_config").set({ password: p });
+    }
+</script>
+</body>
+</html>
